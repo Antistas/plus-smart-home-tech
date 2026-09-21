@@ -1,0 +1,50 @@
+package ru.yandex.practicum.telemetry.aggregator.service;
+
+import org.springframework.stereotype.Component;
+import ru.yandex.practicum.kafka.telemetry.event.SensorEventAvro;
+import ru.yandex.practicum.kafka.telemetry.event.SensorStateAvro;
+import ru.yandex.practicum.kafka.telemetry.event.SensorsSnapshotAvro;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+
+@Component
+public class SnapshotAggregator {
+    private final Map<String, SensorsSnapshotAvro> snapshots = new HashMap<>();
+
+    public Optional<SensorsSnapshotAvro> updateState(SensorEventAvro event) {
+        Objects.requireNonNull(event, "event must not be null");
+
+        SensorsSnapshotAvro snapshot = snapshots.computeIfAbsent(
+                event.getHubId(),
+                hubId -> createSnapshot(hubId, event)
+        );
+
+        SensorStateAvro oldState = snapshot.getSensorsState().get(event.getId());
+        if (oldState != null
+                && (!event.getTimestamp().isAfter(oldState.getTimestamp())
+                || oldState.getData().equals(event.getPayload()))) {
+            return Optional.empty();
+        }
+
+        SensorStateAvro newState = SensorStateAvro.newBuilder()
+                .setTimestamp(event.getTimestamp())
+                .setData(event.getPayload())
+                .build();
+
+        snapshot.getSensorsState().put(event.getId(), newState);
+        snapshot.setTimestamp(event.getTimestamp());
+
+        return Optional.of(snapshot);
+    }
+
+    private SensorsSnapshotAvro createSnapshot(String hubId, SensorEventAvro event) {
+        return SensorsSnapshotAvro.newBuilder()
+                .setHubId(hubId)
+                .setTimestamp(event.getTimestamp())
+                .setSensorsState(new HashMap<>())
+                .build();
+    }
+}

@@ -1,0 +1,15 @@
+spring:
+  application:
+    name: aggregator
+  main:
+    web-application-type: none
+
+aggregator:
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: aggregator
+      poll-timeout: 1s
+    topics:
+      sensors: telemetry.sensors.v1
+      snapshots: telemetry.snapshots.v1
