@@ -1,33 +1,30 @@
 package ru.yandex.practicum.telemetry.collector.controller;
 
-import jakarta.validation.Valid;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
-import ru.yandex.practicum.telemetry.collector.model.hub.HubEvent;
-import ru.yandex.practicum.telemetry.collector.model.sensor.SensorEvent;
-import ru.yandex.practicum.telemetry.collector.service.CollectorService;
+import com.google.protobuf.Empty;
+import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
+import io.grpc.stub.StreamObserver;
+import net.devh.boot.grpc.server.service.GrpcService;
+import ru.yandex.practicum.grpc.telemetry.collector.CollectorControllerGrpc;
+import ru.yandex.practicum.grpc.telemetry.event.SensorEventProto;
 
-@RestController
-@RequestMapping("/events")
-public class EventController {
-    private final CollectorService collectorService;
+@GrpcService
+public class EventController extends CollectorControllerGrpc.CollectorControllerImplBase {
 
-    public EventController(CollectorService collectorService) {
-        this.collectorService = collectorService;
-    }
+    @Override
+    public void collectSensorEvent(SensorEventProto request, StreamObserver<Empty> responseObserver) {
+        try {
+            // здесь реализуется бизнес-логика
+            // ...
 
-    @PostMapping("/sensors")
-    public ResponseEntity<Void> collectSensorEvent(@Valid @RequestBody SensorEvent event) {
-        collectorService.collectSensorEvent(event);
-        return ResponseEntity.ok().build();
-    }
-
-    @PostMapping("/hubs")
-    public ResponseEntity<Void> collectHubEvent(@Valid @RequestBody HubEvent event) {
-        collectorService.collectHubEvent(event);
-        return ResponseEntity.ok().build();
+            responseObserver.onNext(Empty.getDefaultInstance());
+            responseObserver.onCompleted();
+        } catch (Exception e) {
+            responseObserver.onError(new StatusRuntimeException(
+                    Status.INTERNAL
+                            .withDescription(e.getLocalizedMessage())
+                            .withCause(e)
+            ));
+        }
     }
 }
