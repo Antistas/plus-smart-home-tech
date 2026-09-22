@@ -13,7 +13,6 @@ import java.util.Optional;
 @Component
 public class SnapshotAggregator {
     private final Map<String, SensorsSnapshotAvro> snapshots = new HashMap<>();
-
     public Optional<SensorsSnapshotAvro> updateState(SensorEventAvro event) {
         Objects.requireNonNull(event, "event must not be null");
 
@@ -23,10 +22,13 @@ public class SnapshotAggregator {
         );
 
         SensorStateAvro oldState = snapshot.getSensorsState().get(event.getId());
-        if (oldState != null
-                && (!event.getTimestamp().isAfter(oldState.getTimestamp())
-                || oldState.getData().equals(event.getPayload()))) {
-            return Optional.empty();
+        if (oldState != null) {
+            if (event.getTimestamp().isBefore(oldState.getTimestamp())) {
+                return Optional.empty();
+            }
+            if (oldState.getData().equals(event.getPayload())) {
+                return Optional.empty();
+            }
         }
 
         SensorStateAvro newState = SensorStateAvro.newBuilder()

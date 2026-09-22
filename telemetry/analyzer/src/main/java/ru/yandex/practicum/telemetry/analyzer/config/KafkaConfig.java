@@ -18,8 +18,14 @@ public class KafkaConfig {
         return new KafkaConsumer<>(properties(servers, group, HubEventDeserializer.class));
     }
     @Bean(destroyMethod = "") @Qualifier("snapshotConsumer")
-    Consumer<String, SensorsSnapshotAvro> snapshotConsumer(@Value("${analyzer.kafka.bootstrap-servers}") String servers, @Value("${analyzer.kafka.consumers.snapshots.group-id}") String group) {
-        return new KafkaConsumer<>(properties(servers, group, SnapshotDeserializer.class));
+    Consumer<String, SensorsSnapshotAvro> snapshotConsumer(@Value("${analyzer.kafka.bootstrap-servers}") String servers,
+                                                           @Value("${analyzer.kafka.consumers.snapshots.group-id}") String group,
+                                                           @Value("${analyzer.kafka.consumers.snapshots.auto-offset-reset:earliest}") String autoOffsetReset,
+                                                           @Value("${analyzer.kafka.consumers.snapshots.max-poll-records:1}") int maxPollRecords) {
+        Map<String, Object> configuration = properties(servers, group, SnapshotDeserializer.class);
+        configuration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, autoOffsetReset);
+        configuration.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, maxPollRecords);
+        return new KafkaConsumer<>(configuration);
     }
     private Map<String, Object> properties(String servers, String group, Class<?> deserializer) {
         Map<String, Object> result = new HashMap<>();

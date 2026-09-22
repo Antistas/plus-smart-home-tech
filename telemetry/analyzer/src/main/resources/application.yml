@@ -27,7 +27,10 @@ analyzer:
         poll-timeout: 1s
       snapshots:
         group-id: analyzer-snapshots
+        auto-offset-reset: earliest
         poll-timeout: 1s
+        max-poll-records: 1
+        retry-backoff: 1s
 
 grpc:
   client:
