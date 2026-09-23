@@ -41,7 +41,10 @@ public class SnapshotProcessor {
 
     public void start() {
         try {
+            Runtime.getRuntime().addShutdownHook(new Thread(consumer::wakeup));
+
             consumer.subscribe(List.of(topic));
+
             while (running.get()) {
                 ConsumerRecords<String, SensorsSnapshotAvro> records = consumer.poll(timeout);
                 for (ConsumerRecord<String, SensorsSnapshotAvro> record : records) {
@@ -53,9 +56,12 @@ public class SnapshotProcessor {
                                 && e.getStatus().getCode() != Status.Code.DEADLINE_EXCEEDED) {
                             throw e;
                         }
+
                         log.warn("Hub Router недоступен, повторим снапшот hubId={}, offset={}",
                                 record.key(), record.offset());
+
                         consumer.seek(new TopicPartition(record.topic(), record.partition()), record.offset());
+
                         try {
                             Thread.sleep(retryBackoff.toMillis());
                         } catch (InterruptedException interrupted) {

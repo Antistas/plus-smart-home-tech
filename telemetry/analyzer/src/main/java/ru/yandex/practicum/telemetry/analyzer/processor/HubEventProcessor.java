@@ -35,11 +35,16 @@ public class HubEventProcessor implements Runnable {
     @Override
     public void run() {
         try {
+            Runtime.getRuntime().addShutdownHook(new Thread(consumer::wakeup));
             consumer.subscribe(List.of(topic));
             while (running.get()) {
                 ConsumerRecords<String, HubEventAvro> records = consumer.poll(timeout);
-                for (ConsumerRecord<String, HubEventAvro> record : records) service.handle(record.value());
-                if (!records.isEmpty()) consumer.commitSync();
+
+                for (ConsumerRecord<String, HubEventAvro> record : records)
+                    service.handle(record.value());
+
+                if (!records.isEmpty())
+                    consumer.commitSync();
             }
         } catch (WakeupException e) {
             if (running.get()) throw e;
