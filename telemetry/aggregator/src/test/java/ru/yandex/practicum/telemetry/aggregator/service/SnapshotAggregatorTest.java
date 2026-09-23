@@ -54,6 +54,18 @@ class SnapshotAggregatorTest {
     }
 
     @Test
+    void shouldUpdateChangedStateWithSameMillisecondTimestamp() {
+        aggregator.updateState(event("hub-1", "switch-1", FIRST_TIMESTAMP, false));
+
+        SensorsSnapshotAvro snapshot = aggregator
+                .updateState(event("hub-1", "switch-1", FIRST_TIMESTAMP, true))
+                .orElseThrow();
+
+        SwitchSensorAvro state = (SwitchSensorAvro) snapshot.getSensorsState().get("switch-1").getData();
+        assertThat(state.getState()).isTrue();
+    }
+
+    @Test
     void shouldIgnoreOlderEvent() {
         aggregator.updateState(event("hub-1", "switch-1", SECOND_TIMESTAMP, false));
 
