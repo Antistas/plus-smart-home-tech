@@ -48,10 +48,12 @@ public class AggregationStarter {
 
     public void start() {
         try {
+            Runtime.getRuntime().addShutdownHook(new Thread(consumer::wakeup));
             consumer.subscribe(List.of(sensorEventsTopic));
 
             while (running.get()) {
                 ConsumerRecords<String, SensorEventAvro> records = consumer.poll(pollTimeout);
+
                 for (ConsumerRecord<String, SensorEventAvro> record : records) {
                     snapshotAggregator.updateState(record.value()).ifPresent(this::sendSnapshot);
                 }
