@@ -1,11 +1,11 @@
 package ru.yandex.practicum.telemetry.collector.service;
 
 import org.springframework.stereotype.Service;
+import ru.yandex.practicum.grpc.telemetry.event.HubEventProto;
+import ru.yandex.practicum.grpc.telemetry.event.SensorEventProto;
 import ru.yandex.practicum.telemetry.collector.kafka.KafkaEventProducer;
 import ru.yandex.practicum.telemetry.collector.mapper.HubEventMapper;
 import ru.yandex.practicum.telemetry.collector.mapper.SensorEventMapper;
-import ru.yandex.practicum.telemetry.collector.model.hub.HubEvent;
-import ru.yandex.practicum.telemetry.collector.model.sensor.SensorEvent;
 
 @Service
 public class CollectorService {
@@ -21,11 +21,11 @@ public class CollectorService {
         this.kafkaEventProducer = kafkaEventProducer;
     }
 
-    public void collectSensorEvent(SensorEvent event) {
+    public void collectSensorEvent(SensorEventProto event) {
         kafkaEventProducer.sendSensorEvent(sensorEventMapper.mapToAvro(event));
     }
 
-    public void collectHubEvent(HubEvent event) {
+    public void collectHubEvent(HubEventProto event) {
         kafkaEventProducer.sendHubEvent(hubEventMapper.mapToAvro(event));
     }
 }
