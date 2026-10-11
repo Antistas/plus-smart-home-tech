@@ -3,6 +3,7 @@ package ru.yandex.practicum.order.service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import ru.yandex.practicum.order.client.ProductCatalogClient;
 import ru.yandex.practicum.order.dto.CreateOrderRequest;
 import ru.yandex.practicum.order.dto.OrderDto;
 import ru.yandex.practicum.order.dto.OrderItemRequest;
@@ -22,15 +23,20 @@ public class OrderService {
 
     private final OrderRepository orderRepository;
     private final OrderMapper orderMapper;
+    private final ProductCatalogClient productCatalogClient;
 
     @Transactional
     public OrderDto create(CreateOrderRequest request) {
-        BigDecimal totalPrice = request.items().stream()
+        List<OrderItemRequest> items = request.items().stream()
+                .map(this::enrichProductSnapshot)
+                .toList();
+
+        BigDecimal totalPrice = items.stream()
                 .map(this::calculateItemTotal)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         Order order = new Order(request.customerName(), request.customerEmail(), totalPrice);
-        request.items().stream()
+        items.stream()
                 .map(item -> new OrderItem(
                         item.productId(),
                         item.productName(),
@@ -61,5 +67,14 @@ public class OrderService {
 
     private BigDecimal calculateItemTotal(OrderItemRequest item) {
         return item.price().multiply(BigDecimal.valueOf(item.quantity()));
+    }
+
+    private OrderItemRequest enrichProductSnapshot(OrderItemRequest item) {
+        if (item.productName() != null && item.price() != null) {
+            return item;
+        }
+
+        ProductCatalogClient.ProductSnapshot product = productCatalogClient.getProduct(item.productId());
+        return new OrderItemRequest(item.productId(), product.name(), item.quantity(), product.price());
     }
 }
