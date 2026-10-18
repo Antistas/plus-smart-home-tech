@@ -18,4 +18,7 @@ public record OrderItemRequest(
 
         BigDecimal price
 ) {
+    public OrderItemRequest(Long productId, Integer quantity) {
+        this(productId, null, quantity, null);
+    }
 }

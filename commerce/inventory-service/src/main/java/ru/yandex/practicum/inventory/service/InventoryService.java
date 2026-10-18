@@ -72,6 +72,14 @@ public class InventoryService {
         return new ReserveResponse(true, inventory.getAvailableQuantity(), "Товар успешно зарезервирован");
     }
 
+    @Transactional
+    public ReserveResponse release(ReserveRequest request) {
+        Inventory inventory = findByProductId(request.productId());
+        inventory.release(request.quantity());
+        inventoryRepository.saveAndFlush(inventory);
+        return new ReserveResponse(true, inventory.getAvailableQuantity(), "Резерв успешно снят");
+    }
+
     private Inventory findByProductId(Long productId) {
         return inventoryRepository.findByProductId(productId)
                 .orElseThrow(() -> new NotFoundException(
