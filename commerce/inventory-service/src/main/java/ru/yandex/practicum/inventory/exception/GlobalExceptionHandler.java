@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -29,6 +30,16 @@ public class GlobalExceptionHandler {
     public ErrorResponse handleInsufficientStock(InsufficientStockException e) {
         log.warn("Недостаточно товара: {}", e.getMessage());
         return new ErrorResponse(HttpStatus.CONFLICT.value(), e.getMessage());
+    }
+
+    @ExceptionHandler({ConflictException.class, DataIntegrityViolationException.class})
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ErrorResponse handleConflict(Exception e) {
+        log.warn("Конфликт состояния склада: {}", e.getMessage());
+        String message = e instanceof ConflictException
+                ? e.getMessage()
+                : "Складская запись для товара уже существует";
+        return new ErrorResponse(HttpStatus.CONFLICT.value(), message);
     }
 
     /**
