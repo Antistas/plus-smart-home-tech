@@ -67,4 +67,9 @@ public class Order {
     public void confirm() {
         this.status = OrderStatus.CONFIRMED;
     }
+
+    public void markPendingConfirmation(String details) {
+        this.status = OrderStatus.PENDING_CONFIRMATION;
+        this.statusDetails = details;
+    }
 }
