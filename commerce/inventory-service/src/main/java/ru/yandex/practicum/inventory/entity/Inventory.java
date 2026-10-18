@@ -50,4 +50,13 @@ public class Inventory {
     public void reserve(int quantity) {
         this.reservedQuantity += quantity;
     }
+
+    public void release(int quantity) {
+        if (quantity > reservedQuantity) {
+            throw new IllegalArgumentException(
+                    "Нельзя снять резерв " + quantity + ", зарезервировано только " + reservedQuantity
+            );
+        }
+        this.reservedQuantity -= quantity;
+    }
 }

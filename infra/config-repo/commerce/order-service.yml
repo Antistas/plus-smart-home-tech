@@ -13,3 +13,18 @@ spring:
   sql:
     init:
       mode: never
+  cloud:
+    openfeign:
+      client:
+        config:
+          default:
+            connectTimeout: 3000
+            readTimeout: 5000
+          inventory-service:
+            connectTimeout: 2000
+            readTimeout: 3000
+            loggerLevel: BASIC
+
+logging:
+  level:
+    ru.yandex.practicum.order.client.InventoryClient: DEBUG

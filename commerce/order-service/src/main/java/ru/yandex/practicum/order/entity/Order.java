@@ -63,4 +63,8 @@ public class Order {
         items.add(item);
         item.attachTo(this);
     }
+
+    public void confirm() {
+        this.status = OrderStatus.CONFIRMED;
+    }
 }

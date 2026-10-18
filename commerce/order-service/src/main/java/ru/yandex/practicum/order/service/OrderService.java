@@ -1,80 +1,156 @@
 package ru.yandex.practicum.order.service;
 
+import feign.FeignException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import ru.yandex.practicum.order.client.ProductCatalogClient;
+import ru.yandex.practicum.order.client.InventoryClient;
+import ru.yandex.practicum.order.client.ProductClient;
 import ru.yandex.practicum.order.dto.CreateOrderRequest;
+import ru.yandex.practicum.order.dto.InventoryOperationRequest;
 import ru.yandex.practicum.order.dto.OrderDto;
 import ru.yandex.practicum.order.dto.OrderItemRequest;
-import ru.yandex.practicum.order.entity.Order;
-import ru.yandex.practicum.order.entity.OrderItem;
+import ru.yandex.practicum.order.dto.ProductResponse;
 import ru.yandex.practicum.order.exception.NotFoundException;
+import ru.yandex.practicum.order.exception.OrderProcessingException;
 import ru.yandex.practicum.order.mapper.OrderMapper;
 import ru.yandex.practicum.order.repository.OrderRepository;
 
-import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
 public class OrderService {
 
     private final OrderRepository orderRepository;
     private final OrderMapper orderMapper;
-    private final ProductCatalogClient productCatalogClient;
+    private final ProductClient productClient;
+    private final InventoryClient inventoryClient;
+    private final OrderPersistenceService orderPersistenceService;
 
-    @Transactional
     public OrderDto create(CreateOrderRequest request) {
-        List<OrderItemRequest> items = request.items().stream()
-                .map(this::enrichProductSnapshot)
-                .toList();
+        // Поддержка контракта прошлого спринта. Новый контракт передаёт только productId и quantity.
+        if (request.items().stream().allMatch(this::containsLegacySnapshot)) {
+            return orderPersistenceService.save(request, false);
+        }
 
-        BigDecimal totalPrice = items.stream()
-                .map(this::calculateItemTotal)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        Map<Long, Integer> quantities = aggregateQuantities(request.items());
+        Map<Long, ProductResponse> products = loadProducts(quantities.keySet());
+        List<InventoryOperationRequest> completedReservations = new ArrayList<>();
 
-        Order order = new Order(request.customerName(), request.customerEmail(), totalPrice);
-        items.stream()
-                .map(item -> new OrderItem(
-                        item.productId(),
-                        item.productName(),
-                        item.quantity(),
-                        item.price()
-                ))
-                .forEach(order::addItem);
+        try {
+            for (Map.Entry<Long, Integer> entry : quantities.entrySet()) {
+                InventoryOperationRequest reservation =
+                        new InventoryOperationRequest(entry.getKey(), entry.getValue());
+                reserve(reservation);
+                completedReservations.add(reservation);
+            }
 
-        return orderMapper.toDto(orderRepository.save(order));
+            List<OrderItemRequest> snapshotItems = request.items().stream()
+                    .map(item -> toSnapshot(item, products.get(item.productId())))
+                    .toList();
+            CreateOrderRequest snapshotRequest = new CreateOrderRequest(
+                    request.customerName(), request.customerEmail(), snapshotItems
+            );
+
+            return orderPersistenceService.save(snapshotRequest, true);
+        } catch (RuntimeException exception) {
+            releaseReservations(completedReservations);
+            if (exception instanceof OrderProcessingException processingException) {
+                throw processingException;
+            }
+            throw new OrderProcessingException("Не удалось завершить создание заказа", exception);
+        }
     }
 
+    @Transactional(readOnly = true)
     public OrderDto getById(Long id) {
         return orderMapper.toDto(orderRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Заказ с id " + id + " не найден")));
     }
 
+    @Transactional(readOnly = true)
     public List<OrderDto> getAll() {
         return orderRepository.findAll().stream()
                 .map(orderMapper::toDto)
                 .toList();
     }
 
+    @Transactional(readOnly = true)
     public List<OrderDto> getByEmail(String email) {
         return orderRepository.findAllByCustomerEmail(email).stream()
                 .map(orderMapper::toDto)
                 .toList();
     }
 
-    private BigDecimal calculateItemTotal(OrderItemRequest item) {
-        return item.price().multiply(BigDecimal.valueOf(item.quantity()));
+    private Map<Long, Integer> aggregateQuantities(List<OrderItemRequest> items) {
+        Map<Long, Integer> quantities = new LinkedHashMap<>();
+        items.forEach(item -> quantities.merge(item.productId(), item.quantity(), Integer::sum));
+        return quantities;
     }
 
-    private OrderItemRequest enrichProductSnapshot(OrderItemRequest item) {
-        if (item.productName() != null && item.price() != null) {
-            return item;
+    private Map<Long, ProductResponse> loadProducts(Iterable<Long> productIds) {
+        Map<Long, ProductResponse> products = new LinkedHashMap<>();
+        for (Long productId : productIds) {
+            ProductResponse product = getProduct(productId);
+            if (!Boolean.TRUE.equals(product.active())) {
+                throw new OrderProcessingException("Товар " + productId + " снят с продажи");
+            }
+            products.put(productId, product);
         }
+        return products;
+    }
 
-        ProductCatalogClient.ProductSnapshot product = productCatalogClient.getProduct(item.productId());
+    private ProductResponse getProduct(Long productId) {
+        try {
+            return productClient.getProduct(productId);
+        } catch (FeignException.NotFound exception) {
+            throw new OrderProcessingException("Товар " + productId + " не найден", exception);
+        } catch (FeignException exception) {
+            throw new OrderProcessingException("Не удалось получить данные товара " + productId, exception);
+        }
+    }
+
+    private void reserve(InventoryOperationRequest request) {
+        try {
+            inventoryClient.reserve(request);
+        } catch (FeignException.NotFound exception) {
+            throw new OrderProcessingException(
+                    "Складская запись для товара " + request.productId() + " не найдена", exception
+            );
+        } catch (FeignException.Conflict exception) {
+            throw new OrderProcessingException(
+                    "Недостаточно товара " + request.productId() + " для оформления заказа", exception
+            );
+        } catch (FeignException exception) {
+            throw new OrderProcessingException(
+                    "Не удалось зарезервировать товар " + request.productId(), exception
+            );
+        }
+    }
+
+    private void releaseReservations(List<InventoryOperationRequest> reservations) {
+        for (int index = reservations.size() - 1; index >= 0; index--) {
+            InventoryOperationRequest reservation = reservations.get(index);
+            try {
+                inventoryClient.release(reservation);
+            } catch (Exception compensationError) {
+                log.error("Не удалось снять резерв товара {} в количестве {}",
+                        reservation.productId(), reservation.quantity(), compensationError);
+            }
+        }
+    }
+
+    private OrderItemRequest toSnapshot(OrderItemRequest item, ProductResponse product) {
         return new OrderItemRequest(item.productId(), product.name(), item.quantity(), product.price());
+    }
+
+    private boolean containsLegacySnapshot(OrderItemRequest item) {
+        return item.productName() != null && item.price() != null;
     }
 }
