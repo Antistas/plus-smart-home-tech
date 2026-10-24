@@ -13,3 +13,7 @@ spring:
   sql:
     init:
       mode: never
+
+logging:
+  level:
+    ru.yandex.practicum.product.controller.ProductController: INFO

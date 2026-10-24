@@ -1,7 +1,10 @@
 package ru.yandex.practicum.product.controller;
 
 import jakarta.validation.Valid;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.env.Environment;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -22,12 +25,19 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/products")
 @RequiredArgsConstructor
+@Slf4j
 public class ProductController {
 
     private final ProductService productService;
+    private final Environment environment;
 
     @GetMapping
-    public List<ProductDto> getAllProducts() {
+    public List<ProductDto> getAllProducts(HttpServletResponse response) {
+        String port = environment.getProperty("local.server.port", "unknown");
+        long pid = ProcessHandle.current().pid();
+
+        response.setHeader("X-Product-Instance", "port=" + port + ";pid=" + pid);
+        log.info("GET /api/products обработан экземпляром product-service: port={}, pid={}", port, pid);
         return productService.getAllActive();
     }
 
