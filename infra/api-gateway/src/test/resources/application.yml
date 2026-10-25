@@ -1,0 +1,32 @@
+spring:
+  cloud:
+    config:
+      enabled: false
+    gateway:
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowed-origins:
+              - http://localhost:8443
+            allowed-methods:
+              - GET
+              - POST
+              - OPTIONS
+            allowed-headers:
+              - Authorization
+              - Content-Type
+            allow-credentials: true
+
+eureka:
+  client:
+    enabled: false
+
+app:
+  security:
+    users:
+      - username: ivan
+        password: ivan
+        roles: [USER]
+      - username: anna
+        password: anna
+        roles: [USER, ADMIN]
